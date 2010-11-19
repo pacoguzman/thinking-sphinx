@@ -106,6 +106,11 @@ module ThinkingSphinx
       self
     end
     
+    def as_json(*args)
+      populate
+      @array.as_json(*args)
+    end
+    
     # Indication of whether the request has been made to Sphinx for the search
     # query.
     # 
@@ -351,7 +356,8 @@ module ThinkingSphinx
           log query do
             @results = client.query query, indexes, comment
           end
-          log "Found #{@results[:total_found].to_i} results"
+          total = @results[:total_found].to_i
+          log "Found #{total} result#{'s' unless total == 1}"
         rescue Errno::ECONNREFUSED => err
           raise ThinkingSphinx::ConnectionError,
             'Connection to Sphinx Daemon (searchd) failed.'
