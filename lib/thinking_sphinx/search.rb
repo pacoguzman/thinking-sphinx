@@ -111,6 +111,40 @@ module ThinkingSphinx
       !!@populated
     end
     
+    # Indication of whether the request resulted in an error from Sphinx.
+    # 
+    # @return [Boolean] true if Sphinx reports query error
+    # 
+    def error?
+      !!error
+    end
+    
+    # The Sphinx-reported error, if any.
+    # 
+    # @return [String, nil]
+    # 
+    def error
+      populate
+      @results[:error]
+    end
+    
+    # Indication of whether the request resulted in a warning from Sphinx.
+    # 
+    # @return [Boolean] true if Sphinx reports query warning
+    # 
+    def warning?
+      !!warning
+    end
+    
+    # The Sphinx-reported warning, if any.
+    # 
+    # @return [String, nil]
+    # 
+    def warning
+      populate
+      @results[:warning]
+    end
+    
     # The query result hash from Riddle.
     # 
     # @return [Hash] Raw Sphinx results
@@ -350,6 +384,13 @@ module ThinkingSphinx
           }
           log "Found #{@results[:total_found]} results", :debug,
             "Sphinx (#{sprintf("%f", runtime)}s)"
+          
+          log "Sphinx Daemon returned warning: #{warning}", :error if warning?
+          
+          if error?
+            log "Sphinx Daemon returned error: #{error}", :error
+            raise SphinxError.new(error, @results) unless options[:ignore_errors]
+          end
         rescue Errno::ECONNREFUSED => err
           raise ThinkingSphinx::ConnectionError,
             'Connection to Sphinx Daemon (searchd) failed.'
@@ -501,12 +542,7 @@ module ThinkingSphinx
     def conditions_as_query
       return '' if @options[:conditions].blank?
       
-      # Soon to be deprecated.
-      keys = @options[:conditions].keys.reject { |key|
-        attributes.include?(key.to_sym)
-      }
-      
-      ' ' + keys.collect { |key|
+      ' ' + @options[:conditions].keys.collect { |key|
         "@#{key} #{options[:conditions][key]}"
       }.join(' ')
     end
@@ -561,7 +597,7 @@ module ThinkingSphinx
     def sort_by
       case @sort_by = (options[:sort_by] || options[:order])
       when String
-        sorted_fields_to_attributes(@sort_by)
+        sorted_fields_to_attributes(@sort_by.clone)
       when Symbol
         field_names.include?(@sort_by) ?
           @sort_by.to_s.concat('_sort') : @sort_by.to_s
